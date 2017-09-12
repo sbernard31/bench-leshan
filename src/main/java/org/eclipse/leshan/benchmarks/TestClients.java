@@ -29,6 +29,7 @@ import java.util.logging.Handler;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
+import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.leshan.LwM2mId;
 import org.eclipse.leshan.ResponseCode;
 import org.eclipse.leshan.client.californium.LeshanClient;
@@ -42,20 +43,25 @@ import org.eclipse.leshan.client.resource.ObjectsInitializer;
 import org.eclipse.leshan.client.servers.DmServerInfo;
 import org.eclipse.leshan.core.request.BindingMode;
 import org.eclipse.leshan.core.response.ExecuteResponse;
+import org.eclipse.leshan.util.NamedThreadFactory;
+import org.eclipse.leshan.util.RandomStringUtils;
 
 public class TestClients {
 
 	// Number of client to start
 	public static final int NBCLIENT = 1000;
 	// Time the client remains registered in ms
-	public static final long timeAlive = 100;
+	public static final long timeAlive = 2000;
 	// True if you want to use DTLS
 	public static final boolean secure = true;
+	// Manufacturer name : set a large value to test block2.
+	//public static final String manufacturer = "IT - TEST - 123";
+	public static final String manufacturer = "IT - TEST - 123" + RandomStringUtils.random(5000);
 	
 
 	private static CountDownLatch latch;
 	private static ScheduledExecutorService executor = Executors
-			.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
+			.newScheduledThreadPool(Runtime.getRuntime().availableProcessors(), new NamedThreadFactory("TestClients-Launcher"));
 
 	private static final AtomicInteger nb_success = new AtomicInteger();
 	private static final AtomicInteger nb_timeout = new AtomicInteger();
@@ -96,7 +102,7 @@ public class TestClients {
 					Security.noSec("coap://localhost:5683",12345));
 		initializer.setInstancesForObject(LwM2mId.SERVER, new Server(12345, 36000, BindingMode.U, false));
 		initializer.setInstancesForObject(LwM2mId.DEVICE,
-				new Device("Eclipse Leshan", "IT - TEST - 123", "12345", "U") {
+				new Device("Eclipse Leshan", manufacturer, "12345", "U") {
 
 					@Override
 					public ExecuteResponse execute(int resourceid, String params) {
@@ -108,15 +114,15 @@ public class TestClients {
 					}
 				});
 		List<LwM2mObjectEnabler> objects = initializer.createMandatory();
-		objects.add(initializer.create(2));
 
 		// Build Client
 		LeshanClientBuilder builder = new LeshanClientBuilder(endpoint);
+		builder.setCoapConfig(LeshanClientBuilder.createDefaultNetworkConfig().set(NetworkConfig.Keys.MAX_RESOURCE_BODY_SIZE, 10240));
 		builder.setObjects(objects);
 		if (secure)
-			builder.noUnsecureEndpoint();
+			builder.disableUnsecuredEndpoint();
 		else
-			builder.noSecureEndpoint();
+			builder.disableSecuredEndpoint();
 
 		return builder.build();
 	}

@@ -23,7 +23,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Handler;
 import java.util.logging.Logger;
 
+import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.leshan.core.observation.Observation;
+import org.eclipse.leshan.core.request.ReadRequest;
+import org.eclipse.leshan.core.response.ErrorCallback;
+import org.eclipse.leshan.core.response.ReadResponse;
+import org.eclipse.leshan.core.response.ResponseCallback;
 import org.eclipse.leshan.server.californium.LeshanServerBuilder;
 import org.eclipse.leshan.server.californium.impl.LeshanServer;
 import org.eclipse.leshan.server.registration.Registration;
@@ -34,6 +39,8 @@ import org.eclipse.leshan.server.security.SecurityStore;
 
 public class TestServer {
 
+	static final long SecurityStoreLatency = 10; // in ms;
+	
 	static Logger cflog;
 	static {
 		Logger globalLogger = Logger.getLogger("");
@@ -64,6 +71,10 @@ public class TestServer {
 			
 			@Override
 			public SecurityInfo getByIdentity(String pskIdentity) {
+				try {
+					Thread.sleep(SecurityStoreLatency);
+				} catch (InterruptedException e) {
+				}
 				if (pskIdentity.startsWith("sec")) {
 					nbPsk.incrementAndGet();
 					return SecurityInfo.newPreSharedKeyInfo(pskIdentity, pskIdentity, new String("key").getBytes());
@@ -75,6 +86,10 @@ public class TestServer {
 			
 			@Override
 			public SecurityInfo getByEndpoint(String endpoint) {
+				try {
+					Thread.sleep(SecurityStoreLatency);
+				} catch (InterruptedException e) {
+				}
 				if (endpoint.startsWith("sec"))
 					return SecurityInfo.newPreSharedKeyInfo(endpoint, endpoint, new String("key").getBytes());
 				else
@@ -82,6 +97,7 @@ public class TestServer {
 			}
 		};
 		builder.setSecurityStore(store);
+		builder.setCoapConfig(LeshanServerBuilder.createDefaultNetworkConfig().set(NetworkConfig.Keys.MAX_RESOURCE_BODY_SIZE, 10240));
 		server = builder.build();
 		
 		// Add counters
@@ -102,6 +118,18 @@ public class TestServer {
 					Collection<Observation> previousObsersations) {
 				if (count.get())
 					nbReg.incrementAndGet();
+				
+				server.send(reg, new ReadRequest(3), new ResponseCallback<ReadResponse>() {
+					@Override
+					public void onResponse(ReadResponse response) {
+						//System.out.println(response);
+					};
+				}, new ErrorCallback() {
+					@Override
+					public void onError(Exception e) {
+						//e.printStackTrace();
+					}
+				});
 			}
 		});
 		
